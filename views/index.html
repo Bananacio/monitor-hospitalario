@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <div class="dashboard-wrapper">
+        <!-- BARRA LATERAL (SIDEBAR) -->
+        <aside class="sidebar">
+            <nav class="sidebar-menu">
+                <button class="nav-item active" onclick="cambiarModulo('principal', event)" title="Panel General">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/></svg>
+                </button>
+                <button class="nav-item" onclick="cambiarModulo('pacientes', event)" title="Habitaciones y Pacientes">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </button>
+                <button class="nav-item reset-btn" onclick="reiniciarSimulacion()" title="Reiniciar Simulación">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+            </nav>
+        </aside>
+
+        <!-- CONTENIDO PRINCIPAL -->
+        <main class="main-content">
+            <!-- Header Superior -->
+            <header class="top-header">
+                <div>
+                    <h1>Central de Monitoreo</h1>
+                    <p class="subtext">Unidad de Telemetría Hospitalaria</p>
+                </div>
+                <div class="header-right">
+                    <div id="reloj" class="reloj-badge">00:00:00</div>
+                    <div class="profile-pill">
+                        <div class="avatar">AD</div>
+                        <span>Administrador</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- MÓDULO 1: PANEL PRINCIPAL (ALERTAS Y GRÁFICO) -->
+            <section id="modulo-principal" class="modulo active">
+                <div class="card">
+                    <div class="card-title">
+                        <h3>🚨 Resumen de Últimas Alertas</h3>
+                    </div>
+                    <div class="tabla-container">
+                        <table class="tabla-alertas">
+                            <thead>
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>Habitación</th>
+                                    <th>Paciente</th>
+                                    <th>Tipo de Alerta</th>
+                                    <th>Valor Detectado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-alertas-body">
+                                <tr>
+                                    <td colspan="5" class="text-center">Sin alertas recientes registradas.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card chart-card">
+                    <div class="card-title">
+                        <h3>Frecuencia Cardíaca en Tiempo Real (BPM)</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="graficoBPM"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MÓDULO 2: PACIENTES Y HABITACIONES -->
+            <section id="modulo-pacientes" class="modulo">
+                <div class="habitacion-section">
+                    <div class="habitacion-header">
+                        <h2>🏥 Habitación 32</h2>
+                        <span class="badge-habitacion">2 Pacientes Asignados</span>
+                    </div>
+
+                    <div class="grid-pacientes-resumen" id="contenedor-pacientes-hab32">
+                        <!-- Tarjetas de pacientes -->
+                    </div>
+                </div>
+
+                <!-- Apartado Desplegable con Ficha Completa -->
+                <div id="panel-ficha-completa" class="card ficha-desplegable oculto">
+                    <div class="card-title">
+                        <h2 id="ficha-nombre-paciente">Ficha del Paciente</h2>
+                        <button class="btn-cerrar" onclick="cerrarFichaCompleta()">✕ Cerrar Ficha</button>
+                    </div>
+                    <div id="contenido-ficha-detalle"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>
