@@ -14,6 +14,64 @@ const connectionStatus = document.getElementById('connection-status');
 const cards = new Map();
 const readings = new Map();
 
+class SignalTrace {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.context = canvas.getContext('2d');
+    this.samples = [];
+    this.maxSamples = 180;
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(canvas.parentElement);
+    this.resize();
+  }
+
+  resize() {
+    const bounds = this.canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    this.width = Math.max(1, bounds.width);
+    this.height = Math.max(1, bounds.height);
+    this.canvas.width = Math.round(this.width * ratio);
+    this.canvas.height = Math.round(this.height * ratio);
+    this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    this.draw();
+  }
+
+  push(samples) {
+    samples.forEach((sample) => this.samples.push(sample));
+    if (this.samples.length > this.maxSamples) {
+      this.samples.splice(0, this.samples.length - this.maxSamples);
+    }
+    this.draw();
+  }
+
+  draw() {
+    const { context, samples, width, height } = this;
+    if (!width || !height) return;
+
+    context.clearRect(0, 0, width, height);
+    if (samples.length < 2) return;
+
+    const minimum = Math.min(...samples);
+    const maximum = Math.max(...samples);
+    const span = maximum - minimum;
+    context.beginPath();
+    context.lineWidth = 1.8;
+    context.lineJoin = 'round';
+    context.lineCap = 'round';
+    context.strokeStyle = '#16836c';
+
+    samples.forEach((sample, index) => {
+      const normalized = span > 0 ? 1 - (sample - minimum) / span : 0.5;
+      const x = (index / (this.maxSamples - 1)) * width;
+      const y = height * (0.1 + normalized * 0.8);
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+
+    context.stroke();
+  }
+}
+
 function patientKey(reading) {
   return `${reading.habitacion}/${reading.paciente}`;
 }
@@ -44,12 +102,24 @@ function createCard(reading) {
   state.className = 'reading-state';
   cardTop.append(identity, state);
 
+  const metrics = document.createElement('div');
+  metrics.className = 'patient-metrics';
+
   const bpm = document.createElement('div');
   bpm.className = 'patient-bpm';
-  const value = document.createElement('strong');
-  const unit = document.createElement('span');
-  unit.textContent = 'BPM';
-  bpm.append(value, unit);
+  const bpmValue = document.createElement('strong');
+  const bpmUnit = document.createElement('span');
+  bpmUnit.textContent = 'BPM';
+  bpm.append(bpmValue, bpmUnit);
+
+  const temp = document.createElement('div');
+  temp.className = 'patient-temp';
+  const tempValue = document.createElement('strong');
+  const tempUnit = document.createElement('span');
+  tempUnit.textContent = '°C';
+  temp.append(tempValue, tempUnit);
+
+  metrics.append(bpm, temp);
 
   const divider = document.createElement('div');
   divider.className = 'card-divider';
@@ -62,7 +132,25 @@ function createCard(reading) {
   const topic = document.createElement('code');
   topic.className = 'topic-label';
 
-  card.append(cardTop, bpm, divider, details, topic);
+  const signalSection = document.createElement('section');
+  signalSection.className = 'signal-section';
+  const signalLabel = document.createElement('h4');
+  signalLabel.className = 'signal-label';
+  signalLabel.textContent = 'SEÑAL RAW DEL SENSOR';
+  const signalChart = document.createElement('div');
+  signalChart.className = 'signal-chart';
+  signalChart.setAttribute('role', 'img');
+  signalChart.setAttribute('aria-label', 'Gráfica de la señal raw del sensor en tiempo real');
+  const canvas = document.createElement('canvas');
+  canvas.setAttribute('aria-hidden', 'true');
+  const signalPlaceholder = document.createElement('span');
+  signalPlaceholder.className = 'signal-placeholder';
+  signalPlaceholder.textContent = 'Esperando señal raw';
+  signalChart.append(canvas, signalPlaceholder);
+  signalSection.append(signalLabel, signalChart);
+
+  card.append(cardTop, metrics, signalSection, divider, details, topic);
+  card.signalTrace = new SignalTrace(canvas);
   return card;
 }
 
@@ -77,11 +165,21 @@ function renderCard(reading) {
   const status = ['normal', 'advertencia', 'peligro', 'recibido'].includes(reading.estado)
     ? reading.estado
     : 'recibido';
+  const bpmValue = reading.ritmo !== null && reading.ritmo !== undefined && Number.isFinite(Number(reading.ritmo))
+    ? Number(reading.ritmo)
+    : null;
+  const tempValue = reading.temperatura !== null && reading.temperatura !== undefined && Number.isFinite(Number(reading.temperatura))
+    ? Number(reading.temperatura)
+    : null;
+
   card.className = `patient-card status-${status}`;
   card.querySelector('.room-label').textContent = reading.habitacion;
   card.querySelector('.patient-name').textContent = reading.paciente;
   card.querySelector('.reading-state').textContent = status.toUpperCase();
-  card.querySelector('.patient-bpm strong').textContent = reading.ritmo;
+  card.querySelector('.patient-bpm').hidden = bpmValue === null;
+  card.querySelector('.patient-bpm strong').textContent = bpmValue !== null ? bpmValue : '--';
+  card.querySelector('.patient-temp').hidden = tempValue === null;
+  card.querySelector('.patient-temp strong').textContent = tempValue !== null ? tempValue.toFixed(1) : '--';
   card.querySelector('time').dateTime = reading.timestamp;
   card.querySelector('time').textContent = formatTime(reading.timestamp);
   card.querySelector('.topic-label').textContent = reading.topic || `${reading.habitacion}/${reading.paciente}`;
@@ -125,10 +223,46 @@ function updateSummary() {
 }
 
 function receiveReading(reading) {
-  if (!reading || !reading.habitacion || !reading.paciente || !Number.isFinite(Number(reading.ritmo))) return;
-  const normalized = { ...reading, ritmo: Number(reading.ritmo) };
+  if (!reading || !reading.habitacion || !reading.paciente) return;
+
+  const hasBpm = reading.ritmo !== undefined && reading.ritmo !== null && Number.isFinite(Number(reading.ritmo));
+  const hasTemp = reading.temperatura !== undefined && reading.temperatura !== null && Number.isFinite(Number(reading.temperatura));
+  if (!hasBpm && !hasTemp) return;
+
+  const normalized = {
+    ...reading,
+    ritmo: hasBpm ? Number(reading.ritmo) : null,
+    temperatura: hasTemp ? Number(reading.temperatura) : null
+  };
+
   readings.set(patientKey(normalized), normalized);
   renderCard(normalized);
+  updateSummary();
+}
+
+function receiveRaw(raw) {
+  if (!raw || !raw.habitacion || !raw.paciente || !Array.isArray(raw.valores)) return;
+  if (!raw.valores.length || !raw.valores.every((value) => Number.isFinite(Number(value)))) return;
+
+  const key = patientKey(raw);
+  const existing = readings.get(key);
+  const normalized = {
+    ...(existing || {
+      habitacion: raw.habitacion,
+      paciente: raw.paciente,
+      ritmo: null,
+      temperatura: null,
+      estado: 'recibido'
+    }),
+    timestamp: raw.timestamp || new Date().toISOString(),
+    topic: raw.topic || `${raw.habitacion}/${raw.paciente}/raw`
+  };
+
+  readings.set(key, normalized);
+  renderCard(normalized);
+  const card = cards.get(key);
+  card.signalTrace.push(raw.valores.map(Number));
+  card.querySelector('.signal-chart').classList.add('has-data');
   updateSummary();
 }
 
@@ -157,5 +291,6 @@ socket.on('estado-inicial', (initialReadings) => {
 });
 
 socket.on('lectura-paciente', receiveReading);
+socket.on('raw-paciente', receiveRaw);
 searchInput.addEventListener('input', applyFilters);
 roomFilter.addEventListener('change', applyFilters);
