@@ -401,7 +401,8 @@ h2 {
 }
 
 .patient-bpm,
-.patient-temp {
+.patient-temp,
+.patient-spo2 {
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -409,7 +410,8 @@ h2 {
 }
 
 .patient-bpm strong,
-.patient-temp strong {
+.patient-temp strong,
+.patient-spo2 strong {
   font-size: 32px;
   font-weight: 550;
   letter-spacing: 0;
@@ -419,7 +421,8 @@ h2 {
 }
 
 .patient-bpm span,
-.patient-temp span {
+.patient-temp span,
+.patient-spo2 span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 600;
@@ -427,6 +430,10 @@ h2 {
 
 .signal-section {
   margin: 2px 0 12px;
+}
+
+.raw-section {
+  margin-top: 0;
 }
 
 .signal-label {
@@ -448,6 +455,16 @@ h2 {
     linear-gradient(#e8ede8 1px, transparent 1px),
     linear-gradient(90deg, #e8ede8 1px, transparent 1px);
   background-size: 19px 19px;
+}
+
+.raw-chart {
+  height: 142px;
+  border-color: #163d32;
+  background-color: #071a15;
+  background-image:
+    linear-gradient(#183a30 1px, transparent 1px),
+    linear-gradient(90deg, #183a30 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 .signal-chart canvas {

@@ -76,15 +76,17 @@ function guardarLectura(datos) {
     .finally(() => persistenciasPendientes.delete(clave));
 }
 
-function emitirLectura({ habitacion, paciente, ritmo, temperatura, tipo = 'bpm', valor, estado = 'recibido', mensaje, origen, topic }) {
+function emitirLectura({ habitacion, paciente, ritmo, temperatura, spo2, tipo = 'bpm', valor, estado = 'recibido', mensaje, origen, topic }) {
   const identificador = `${habitacion}/${paciente}`;
   const actual = pacientes.get(identificador) || {};
-  const valorLectura = Number(valor ?? (tipo === 'bpm' ? ritmo : temperatura));
+  const valorTipo = tipo === 'bpm' ? ritmo : tipo === 'temp' ? temperatura : spo2;
+  const valorLectura = Number(valor ?? valorTipo);
   const datos = {
     habitacion,
     paciente,
     ritmo: Number.isFinite(Number(ritmo)) ? Number(ritmo) : actual.ritmo ?? null,
     temperatura: Number.isFinite(Number(temperatura)) ? Number(temperatura) : actual.temperatura ?? null,
+    spo2: Number.isFinite(Number(spo2)) ? Number(spo2) : actual.spo2 ?? null,
     estado,
     mensaje: mensaje || 'Lectura recibida',
     origen,
@@ -130,6 +132,14 @@ function parsearMuestrasRaw(payload) {
         : NaN
   ));
   return valores.length > 0 && valores.every(Number.isFinite) ? valores : null;
+}
+
+function parsearSpo2(payload) {
+  const contenido = payload.toString().trim();
+  const etiquetado = contenido.match(/^SpO2:\s*(\d+(?:[.,]\d+)?)\s*%$/i);
+  const valorTexto = etiquetado ? etiquetado[1].replace(',', '.') : contenido;
+  const valor = Number(valorTexto);
+  return Number.isFinite(valor) ? valor : null;
 }
 
 // Middlewares para procesar JSON y servir archivos estáticos
@@ -185,6 +195,7 @@ for (const [habitacionBroker, mqttUrl] of Object.entries(mqttBrokers)) {
   const mqttTopics = [
     { tipo: 'bpm', topic: process.env.MQTT_BPM_TOPIC || mqttTopicOverride || `${habitacionBroker}/+/bpm` },
     { tipo: 'temp', topic: process.env.MQTT_TEMP_TOPIC || `${habitacionBroker}/+/temp` },
+    { tipo: 'spo2', topic: process.env.MQTT_SPO2_TOPIC || `${habitacionBroker}/+/spo2` },
     { tipo: 'raw', topic: process.env.MQTT_RAW_TOPIC || `${habitacionBroker}/+/raw` }
   ];
   mqttConnections.set(habitacionBroker, false);
@@ -224,7 +235,7 @@ for (const [habitacionBroker, mqttUrl] of Object.entries(mqttBrokers)) {
 
   mqttClient.on('message', (topic, payload) => {
     const lectura = payload.toString().trim();
-    const partesTopic = topic.match(/^([^/]+)\/([^/]+)\/(bpm|temp|raw)$/);
+    const partesTopic = topic.match(/^([^/]+)\/([^/]+)\/(bpm|temp|spo2|raw)$/);
     if (!partesTopic) {
       return;
     }
@@ -247,9 +258,10 @@ for (const [habitacionBroker, mqttUrl] of Object.entries(mqttBrokers)) {
       return;
     }
 
-    const valor = Number(lectura);
-    if (!Number.isFinite(valor) || valor <= 0) {
-      console.warn(`Payload MQTT no numérico ignorado en ${topic}: ${lectura}`);
+    const esSpo2 = tipo === 'spo2';
+    const valor = esSpo2 ? parsearSpo2(payload) : Number(lectura);
+    if (!Number.isFinite(valor) || valor <= 0 || (esSpo2 && valor > 100)) {
+      console.warn(`Payload MQTT inválido ignorado en ${topic}: ${lectura}`);
       return;
     }
 
@@ -270,6 +282,18 @@ for (const [habitacionBroker, mqttUrl] of Object.entries(mqttBrokers)) {
         estado: 'recibido'
       });
       console.log(`Lectura MQTT recibida en ${topic}: ${valor} BPM`);
+      return;
+    }
+
+    if (esSpo2) {
+      emitirLectura({
+        ...datos,
+        spo2: valor,
+        tipo: 'spo2',
+        valor,
+        estado: 'recibido'
+      });
+      console.log(`Lectura MQTT recibida en ${topic}: ${valor}%`);
       return;
     }
 
